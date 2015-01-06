@@ -21,8 +21,6 @@ import com.damageddev.myotaskerplugin.utils.BundleScrubber;
 import com.damageddev.myotaskerplugin.utils.Constants;
 import com.damageddev.myotaskerplugin.utils.TaskerPlugin;
 
-import net.dinglisch.android.tasker.TaskerIntent;
-
 public final class QueryReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(final Context context, final Intent intent) {
