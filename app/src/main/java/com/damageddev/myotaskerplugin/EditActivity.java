@@ -148,23 +148,35 @@ public class EditActivity extends ActionBarActivity {
     }
 
     private enum Gesture {
-        Fist(Pose.FIST, R.drawable.solid_blue_fist, R.string.fist),
-        DoubleTap(Pose.DOUBLE_TAP, R.drawable.solid_blue_double_tap, R.string.double_tap),
-        WaveIn(Pose.WAVE_IN, R.drawable.solid_blue_wave_left, R.string.wave_in),
-        WaveOut(Pose.WAVE_OUT, R.drawable.solid_blue_wave_right, R.string.wave_out),
-        FingersSpread(Pose.FINGERS_SPREAD, R.drawable.solid_blue_spread_fingers, R.string.fingers_spread);
+        Fist(String.valueOf(Pose.FIST), R.drawable.solid_blue_fist, R.string.fist),
+        DoubleTap(String.valueOf(Pose.DOUBLE_TAP), R.drawable.solid_blue_double_tap, R.string.double_tap),
+        WaveIn(String.valueOf(Pose.WAVE_IN), R.drawable.solid_blue_wave_left, R.string.wave_in),
+        WaveOut(String.valueOf(Pose.WAVE_OUT), R.drawable.solid_blue_wave_right, R.string.wave_out),
+        FingersSpread(String.valueOf(Pose.FINGERS_SPREAD), R.drawable.solid_blue_spread_fingers, R.string.fingers_spread),
+		FistHold(String.valueOf("first_hold"), R.drawable.solid_blue_fist, R.string.fist_hold),
+		WaveOutHold(String.valueOf("wave_out_hold"), R.drawable.solid_blue_wave_right, R.string.wave_out_hold),
+		WaveInHold(String.valueOf("wave_in_hold"), R.drawable.solid_blue_wave_left, R.string.wave_in_hold),
+		FingersSpreadHold(String.valueOf("fingers_spread_hold"), R.drawable.solid_blue_spread_fingers, R.string.fingers_spread_hold);
+		/*
+		 Fist(Pose.FIST, R.drawable.solid_blue_fist, R.string.fist),
+		 DoubleTap(Pose.DOUBLE_TAP, R.drawable.solid_blue_double_tap, R.string.double_tap),
+		 WaveIn(Pose.WAVE_IN, R.drawable.solid_blue_wave_left, R.string.wave_in),
+		 WaveOut(Pose.WAVE_OUT, R.drawable.solid_blue_wave_right, R.string.wave_out),
+		 FingersSpread(Pose.FINGERS_SPREAD, R.drawable.solid_blue_spread_fingers, R.string.fingers_spread),
+		 FistRoll(99001, R.drawable.solid_blue_fist, R.string.fist_roll);*
+		 */
 
-        Pose mPose;
+        String mPose;
         int mIconResourceId;
         int mLabelResourceId;
 
-        Gesture(Pose pose, int iconResourceId, int labelResourceId) {
+        Gesture(String pose, int iconResourceId, int labelResourceId) {
             mPose = pose;
             mIconResourceId = iconResourceId;
             mLabelResourceId = labelResourceId;
         }
 
-        Pose getPose() {
+        String getPose() {
             return mPose;
         }
 

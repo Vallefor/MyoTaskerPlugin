@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.support.v4.app.NotificationCompat;
 import android.text.TextUtils;
+import android.util.Log;
 import android.widget.Toast;
 
 import com.damageddev.myotaskerplugin.EditActivity;
@@ -33,6 +34,11 @@ import com.thalmic.myo.DeviceListener;
 import com.thalmic.myo.Hub;
 import com.thalmic.myo.Myo;
 import com.thalmic.myo.Pose;
+import com.thalmic.myo.Vector3;
+import com.thalmic.myo.Quaternion;
+import com.thalmic.myo.XDirection;
+
+
 
 
 public final class BackgroundService extends Service {
@@ -47,13 +53,44 @@ public final class BackgroundService extends Service {
                     .putExtra(com.twofortyfouram.locale.Intent.EXTRA_ACTIVITY,
                             EditActivity.class.getName());
 
+	private boolean isUnlocked;
+	
     private Toast mToast;
     private Hub mHub;
+	
+	private Vector3 vect;
+	private Vector3 gyro;
 
-    private NotificationManager mNotificationManager;
+	private float roll;
+	private float pitch;
+	private float yaw;
+
+	private Vector3 lastVect;
+	private Vector3 lastGyro;
+
+	private float lastRoll;
+	private float lastPitch;
+	private float lastYaw;
+	private long lastTimePose=0;
+	
+	private boolean rollUnlock=false;
+	private long lastPoseTime=0;
+	private int poseInRow=0;
+	private long lastTimestampRealtimeSend=0;
+	private boolean realTimeProgress=false;
+	
+
+	private long unlockTime;
+	
+	private Pose lastPos;
+	private Pose lastPosFull=Pose.UNKNOWN;
+
+
+	private NotificationManager mNotificationManager;
     private NotificationCompat.Builder mNotificationBuilder;
 
     private long mLastUnlockTime = 0;
+	private long mLastUnlockGesture = 0;
 
     @Override
     public void onCreate() {
@@ -61,8 +98,7 @@ public final class BackgroundService extends Service {
 
         mHub = Hub.getInstance();
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-
-        mHub.setLockingPolicy(Hub.LockingPolicy.NONE);
+        //mHub.setLockingPolicy(Hub.LockingPolicy.NONE);
     }
 
     private DeviceListener mListener = new AbstractDeviceListener() {
@@ -71,6 +107,7 @@ public final class BackgroundService extends Service {
             showToast(getString(R.string.myo_connected));
 
             SharedPreferences sharedPreferences = getSharedPreferences(Constants.SHARED_PREFERENCES_NAME, Context.MODE_MULTI_PROCESS);
+			unlockTime = Long.valueOf(sharedPreferences.getString("relock_time", "5")) * 1000;
 
             if (sharedPreferences.getBoolean(SHOW_MYO_STATUS_NOTIFICATION, true)) {
                 mNotificationBuilder = buildDisconnectNotification()
@@ -80,6 +117,19 @@ public final class BackgroundService extends Service {
                 mNotificationManager.notify(NOTIFICATION_ID, mNotificationBuilder.build());
             }
         }
+
+		@Override
+		public void onUnlock (Myo myo, long timestamp)
+		{
+			//myo.vibrate(Myo.VibrationType.LONG);
+			//isUnlocked=true;
+		}
+
+		@Override
+		public void onLock (Myo myo, long timestamp)
+		{
+			//isUnlocked=false;
+		}
 
         @Override
         public void onDisconnect(Myo myo, long timestamp) {
@@ -93,28 +143,172 @@ public final class BackgroundService extends Service {
                 mNotificationManager.notify(NOTIFICATION_ID, mNotificationBuilder.build());
             }
         }
+		
+		@Override
+		public void	onGyroscopeData (Myo myo, long timestamp, Vector3 gyr)
+		{
+			gyro=gyr;
+		}
+
+		@Override
+		public void onOrientationData(Myo myo, long timestamp, Quaternion rotation) {
+
+			isUnlocked = (mLastUnlockTime + unlockTime) > timestamp;
+			if(!isUnlocked)
+				rollUnlock=false;
+
+			if(lastPosFull!=Pose.REST && lastPosFull!=Pose.UNKNOWN)
+				poseInRow++;
+			
+			// Calculate Euler angles (roll, pitch, and yaw) from the quaternion.
+			roll = (float) Math.toDegrees(Quaternion.roll(rotation));
+			pitch = (float) Math.toDegrees(Quaternion.pitch(rotation));
+			yaw = (float) Math.toDegrees(Quaternion.yaw(rotation));
+			// Adjust roll and pitch for the orientation of the Myo on the arm.
+			if (myo.getXDirection() != XDirection.TOWARD_ELBOW) {
+				roll *= -1;
+				pitch *= -1;
+			}
+			//Log.i("MainActivity", "dif: "+(timestamp-lastPoseTime)+" "+(lastPos==Pose.DOUBLE_TAP)+" "+(lastRoll-roll)/*+" ru:"+rollUnlock*/);
+			Log.i("MainActivity", "posInRow dif: "+poseInRow);
+
+			if(lastPos==Pose.DOUBLE_TAP && /*Math.abs(lastRoll-roll)>30*/vect.length()>2  && (timestamp-lastPoseTime)<1000 && !rollUnlock && !isUnlocked)
+			{
+				rollUnlock=true;
+				mLastUnlockTime = timestamp;
+				mLastUnlockGesture=timestamp;
+				myo.vibrate(Myo.VibrationType.SHORT);
+			}
+			
+			if(isUnlocked && poseInRow>30)
+			{
+				if(!realTimeProgress)
+				{
+					Log.i("LastRoll","lastRoll:"+lastRoll);
+				}
+				realTimeProgress=true;
+				if((timestamp-lastTimestampRealtimeSend)>300)
+				{
+					lastTimestampRealtimeSend = timestamp;
+					mLastUnlockTime = timestamp;
+					if(lastPos== Pose.FIST) {
+						Bundle bundle = getPositionBundle("first_hold");
+						TaskerPlugin.Event.addPassThroughData(INTENT_REQUEST_REQUERY, bundle);
+						BackgroundService.this.sendBroadcast(INTENT_REQUEST_REQUERY);
+					}
+					if(lastPos== Pose.WAVE_IN) {
+						Bundle bundle = getPositionBundle("wave_in_hold");
+						TaskerPlugin.Event.addPassThroughData(INTENT_REQUEST_REQUERY, bundle);
+						BackgroundService.this.sendBroadcast(INTENT_REQUEST_REQUERY);
+					}
+					if(lastPos== Pose.WAVE_OUT) {
+						Bundle bundle = getPositionBundle("wave_out_hold");
+						TaskerPlugin.Event.addPassThroughData(INTENT_REQUEST_REQUERY, bundle);
+						BackgroundService.this.sendBroadcast(INTENT_REQUEST_REQUERY);
+					}
+					if(lastPos== Pose.FINGERS_SPREAD) {
+						Bundle bundle = getPositionBundle("fingers_spread_hold");
+						TaskerPlugin.Event.addPassThroughData(INTENT_REQUEST_REQUERY, bundle);
+						BackgroundService.this.sendBroadcast(INTENT_REQUEST_REQUERY);
+					}
+					lastGyro = gyro;
+					lastVect = vect;
+					lastPitch = pitch;
+					lastRoll = roll;
+					lastYaw = yaw;
+				}
+			}
+				
+		}
 
         @Override
+        public void onAccelerometerData(Myo myo, long timestamp, Vector3 vec) {
+            vect=vec;
+			Log.i("AccelVector","Length: "+vect.length());
+        }
+
+		public Bundle getPositionBundle(String pose)
+		{
+			Bundle bundle = new Bundle();
+
+			bundle.putString(Constants.POSE, pose);
+			bundle.putDouble(Constants.ACCEL_X, vect.x());
+			bundle.putDouble(Constants.ACCEL_Y, vect.y());
+			bundle.putDouble(Constants.ACCEL_Z, vect.z());
+
+			bundle.putDouble(Constants.GYRO_X, gyro.x());
+			bundle.putDouble(Constants.GYRO_X_DIFF, lastGyro.x()-gyro.x());
+			bundle.putDouble(Constants.GYRO_Y, gyro.y());
+			bundle.putDouble(Constants.GYRO_Y_DIFF, lastGyro.y()-gyro.y());
+			bundle.putDouble(Constants.GYRO_Z, gyro.z());
+			bundle.putDouble(Constants.GYRO_Z_DIFF, lastGyro.z()-gyro.z());
+
+			bundle.putDouble(Constants.ROLL, roll);
+			bundle.putDouble(Constants.ROLL_DIFF, lastRoll-roll);
+			bundle.putDouble(Constants.PITCH, pitch);
+			bundle.putDouble(Constants.PITCH_DIFF, lastPitch-pitch);
+			bundle.putDouble(Constants.YAW, yaw);
+			bundle.putDouble(Constants.YAW_DIFF, lastYaw-yaw);
+			return bundle;
+		}
+		
+        @Override
         public void onPose(Myo myo, long timestamp, Pose pose) {
-            showToast(pose.toString());
-            Bundle bundle = new Bundle();
-            bundle.putString(Constants.POSE, pose.toString());
+
+			if((timestamp-mLastUnlockGesture)<700/* || (poseInRow<2 && pose != Pose.DOUBLE_TAP)*/)
+			{
+				Log.i("MainActivity", "lastPosFull false: "+pose.toString());
+				return;
+			}
+			/*if(timestamp-lastTimePose<50)
+				return;*/
+			lastTimePose=timestamp;
+            //showToast(pose.toString());
+			
+			Log.i("MainActivity", "poseInRow reset");
+			poseInRow=0;
+			
+			if(pose!=Pose.REST && pose!=Pose.UNKNOWN)
+			{
+				lastPos=pose;
+				lastPoseTime=timestamp;
+				lastGyro = gyro;
+				lastVect = vect;
+				lastPitch = pitch;
+				lastRoll = roll;
+				lastYaw = yaw;
+			}
+			
 
             SharedPreferences sharedPreferences = getSharedPreferences(Constants.SHARED_PREFERENCES_NAME, Context.MODE_MULTI_PROCESS);
 
-            long unlockTime = Long.valueOf(sharedPreferences.getString("relock_time", "5")) * 1000;
+            //long unlockTime = Long.valueOf(sharedPreferences.getString("relock_time", "5")) * 1000;
 
-            boolean isUnlocked = (mLastUnlockTime + unlockTime) > timestamp;
+            //boolean isUnlocked = (mLastUnlockTime + unlockTime) > timestamp;
 
-            if (pose == Pose.DOUBLE_TAP && !isUnlocked) {
+			/*
+            if (pose == Pose.DOUBLE_TAP && !isUnlocked && rollUnlock) {
                 mLastUnlockTime = timestamp;
                 myo.vibrate(Myo.VibrationType.SHORT);
             }
+            */
 
+			
+
+			if(isUnlocked && (pose==Pose.REST || pose==Pose.UNKNOWN) && !realTimeProgress)
+			{
+				Log.i("SendStatic",lastPosFull.toString());
+				Bundle bundle = getPositionBundle(lastPosFull.toString());
+				TaskerPlugin.Event.addPassThroughData(INTENT_REQUEST_REQUERY, bundle);
+				BackgroundService.this.sendBroadcast(INTENT_REQUEST_REQUERY);
+				mLastUnlockTime = timestamp;
+			}
             if (isUnlocked && (pose != Pose.REST || pose != Pose.UNKNOWN)) {
+				/*
                 TaskerPlugin.Event.addPassThroughData(INTENT_REQUEST_REQUERY, bundle);
                 BackgroundService.this.sendBroadcast(INTENT_REQUEST_REQUERY);
                 mLastUnlockTime = timestamp;
+                */
 
                 if (sharedPreferences.getBoolean("show_toasts", true)) {
                     showToast(pose.toString());
@@ -127,7 +321,18 @@ public final class BackgroundService extends Service {
                             .setContentText(getString(R.string.last_gesture) + " " + pose.toString());
                     mNotificationManager.notify(NOTIFICATION_ID, mNotificationBuilder.build());
                 }
+                
             }
+			lastPosFull=pose;
+			Log.i("MainActivity", "lastPosFull: "+lastPosFull.toString());
+			if (pose == Pose.DOUBLE_TAP && isUnlocked) {
+				mLastUnlockTime=0;
+				isUnlocked=false;
+				rollUnlock=false;
+				lastPos=Pose.UNKNOWN;
+				myo.vibrate(Myo.VibrationType.SHORT);
+			}
+			realTimeProgress=false;
         }
 
         @Override
@@ -198,7 +403,8 @@ public final class BackgroundService extends Service {
         if (!mHub.init(this, getPackageName())) {
             stopSelf();
         }
-
+		
+		mHub.setLockingPolicy(Hub.LockingPolicy.NONE);
         mHub.removeListener(mListener);
         mHub.addListener(mListener);
         mHub.attachToAdjacentMyo();

@@ -5,6 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 
 import com.damageddev.myotaskerplugin.services.BackgroundService;
+import com.damageddev.myotaskerplugin.utils.TaskerPlugin;
+import android.os.Bundle;
+import android.util.Log;
 
 /**
  * Created by agessel on 11/13/14.

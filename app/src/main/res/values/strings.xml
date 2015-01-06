@@ -5,6 +5,10 @@
     <string name="title_activity_edit">Add Myo Gesture</string>
     <string name="done">Done</string>
     <string name="fist">Fist</string>
+    <string name="fist_hold">Fist Hold</string>
+    <string name="wave_in_hold">Wave In Hold</string>
+    <string name="wave_out_hold">Wave Out Hold</string>
+    <string name="fingers_spread_hold">Fingers Spread Hold</string>
     <string name="thumb_to_pinky">Thumb-to-Pinky</string>
     <string name="wave_in">Wave In</string>
     <string name="wave_out">Wave Out</string>
@@ -22,6 +26,7 @@
     <string name="myo_detached">Myo is detached</string>
     <string name="myo_needs_sync">Please perform the setup gesture with the Myo</string>
     <string name="last_gesture">Last gesture:</string>
+    <string name="accel_length">Accel length:</string>
     <string name="relock_time">Relock Time</string>
     <string name="relock_time_summary">The time that your Myo will detect gestures after the unlock gesture is performed</string>
     <string name="last_connected_to">Last connected to:</string>
